@@ -94,6 +94,27 @@
         </div>
       </div>
 
+      <!-- 生成モード選択 -->
+      <div class="mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+        <p class="font-bold text-gray-700 mb-3">問題の生成モード:</p>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <label class="flex-1 cursor-pointer">
+            <input type="radio" name="gen-mode" value="program" class="peer sr-only" checked>
+            <div class="p-4 rounded-lg border-2 border-gray-200 peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition">
+              <div class="font-bold text-indigo-800 mb-1">⚡ 高速プログラム生成 (推奨)</div>
+              <div class="text-sm text-gray-600">一瞬で作成。問題のパターンは固定ですが数値が毎回変わります。計算ミスがありません。</div>
+            </div>
+          </label>
+          <label class="flex-1 cursor-pointer">
+            <input type="radio" name="gen-mode" value="ai" class="peer sr-only">
+            <div class="p-4 rounded-lg border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 transition">
+              <div class="font-bold text-purple-800 mb-1">✨ 完全AIオリジナル生成</div>
+              <div class="text-sm text-gray-600">AIが毎回全く新しい問題を考えます。作成に数秒かかります。計算ミスの可能性あり。</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
       <!-- カテゴリ一覧がここに生成されます -->
       <div id="categories-container" class="space-y-6 mb-8"></div>
 
@@ -572,7 +593,7 @@
       }
 
       // 2. 問題生成メイン処理
-      document.getElementById('btn-generate').addEventListener('click', () => {
+      document.getElementById('btn-generate').addEventListener('click', async () => {
         const selectedIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
         if (selectedIds.length === 0) {
           alert("出題範囲を1つ以上選択してください。");
@@ -581,28 +602,86 @@
 
         const numQuestions = parseInt(document.getElementById('question-count').value);
         document.getElementById('print-score-max').textContent = numQuestions;
+        const genMode = document.querySelector('input[name="gen-mode"]:checked').value;
 
-        const generatedQuestions = [];
-        const uniqueKeys = new Set();
-        let attempts = 0;
-        const maxAttempts = numQuestions * 50; // 無限ループ防止
+        let generatedQuestions = [];
 
-        // 重複回避ロジック
-        while (generatedQuestions.length < numQuestions && attempts < maxAttempts) {
-          attempts++;
-          const targetId = randChoice(selectedIds);
-          const genFunc = generators[targetId] || generators['ch1-1'];
-          const qData = genFunc();
+        if (genMode === 'program') {
+          const uniqueKeys = new Set();
+          let attempts = 0;
+          const maxAttempts = numQuestions * 50; // 無限ループ防止
 
-          // 問題文(q)の文字列をキーとして重複チェック
-          if (!uniqueKeys.has(qData.q)) {
-            uniqueKeys.add(qData.q);
-            generatedQuestions.push({ num: generatedQuestions.length + 1, ...qData });
+          // 重複回避ロジック
+          while (generatedQuestions.length < numQuestions && attempts < maxAttempts) {
+            attempts++;
+            const targetId = randChoice(selectedIds);
+            const genFunc = generators[targetId] || generators['ch1-1'];
+            const qData = genFunc();
+
+            // 問題文(q)の文字列をキーとして重複チェック
+            if (!uniqueKeys.has(qData.q)) {
+              uniqueKeys.add(qData.q);
+              generatedQuestions.push({ num: generatedQuestions.length + 1, ...qData });
+            }
           }
-        }
 
-        if (generatedQuestions.length < numQuestions) {
-          alert(`条件が厳しく、重複しない問題を ${generatedQuestions.length} 問までしか作成できませんでした。`);
+          if (generatedQuestions.length < numQuestions) {
+            alert(`条件が厳しく、重複しない問題を ${generatedQuestions.length} 問までしか作成できませんでした。`);
+          }
+        } else {
+          // AI生成モード
+          const btnGen = document.getElementById('btn-generate');
+          const originalBtnHtml = btnGen.innerHTML;
+          btnGen.disabled = true;
+          btnGen.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> AIが問題を考えています...`;
+
+          const selectedNames = [];
+          categories.forEach(cat => {
+            cat.sections.forEach(sec => {
+              if (selectedIds.includes(sec.id)) selectedNames.push(sec.name);
+            });
+          });
+
+          const systemPrompt = "あなたは高校の数学教師です。JSONフォーマットのみを出力してください。他のテキストは含めないでください。";
+          const prompt = `以下の条件に従って数学Ⅰの小テスト問題を ${numQuestions} 問作成し、JSON形式で出力してください。
+
+【出題範囲】
+${selectedNames.join(', ')}
+
+【出力形式（厳守）】
+以下の形式のJSON配列のみを出力してください。
+[
+  { "q": "問題文 (数式は $ $ または $$ $$ で囲むこと)", "a": "最終的な答え (数式は $ $ で囲むこと)", "exp": "解説の簡単な方針" }
+]
+
+【注意点】
+- 問題文は毎回異なるシチュエーションや数値を使用し、完全にオリジナルにしてください。
+- 答えが極端に複雑にならないよう、適度な難易度にしてください。`;
+
+          try {
+            const aiResponse = await fetchGeminiAPI(prompt, systemPrompt);
+            // JSON部分だけを取り出す
+            const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              const aiQuestions = JSON.parse(jsonMatch[0]);
+              generatedQuestions = aiQuestions.slice(0, numQuestions).map((qData, index) => ({
+                num: index + 1,
+                q: qData.q,
+                a: qData.a,
+                exp: qData.exp
+              }));
+            } else {
+              throw new Error("JSON形式で返されませんでした");
+            }
+          } catch (e) {
+            console.error("AI Generation Error:", e);
+            alert("AIによる問題生成に失敗しました。もう一度試すか、高速プログラム生成をお使いください。");
+            btnGen.disabled = false;
+            btnGen.innerHTML = originalBtnHtml;
+            return;
+          }
+          btnGen.disabled = false;
+          btnGen.innerHTML = originalBtnHtml;
         }
 
         // 3. DOMへ描画 (AI解説ボタンを含む)
