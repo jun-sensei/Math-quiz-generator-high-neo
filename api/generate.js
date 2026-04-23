@@ -11,8 +11,8 @@ export default async function handler(req, res) {
   const { prompt, systemPrompt } = req.body;
 
   try {
-    // 安定版のGemini 2.5 Flashまたは1.5 Flashを指定（環境に応じて調整）
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // 安定稼働している Gemini 1.5 Flash に変更
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
       systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -27,13 +27,14 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errText = await response.text();
       console.error("Gemini API Error details:", errText);
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // 詳細なエラーをフロントに返す
+      return res.status(response.status).json({ error: `Gemini API エラー (${response.status}): ${errText}` });
     }
 
     const data = await response.json();
     return res.status(200).json(data);
   } catch (error) {
     console.error("Gemini API Request Failed:", error);
-    return res.status(500).json({ error: 'Failed to generate content' });
+    return res.status(500).json({ error: `サーバー内部エラー: ${error.message}` });
   }
 }
