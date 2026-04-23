@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数学Ⅰ ランダム小テスト作成 ✨AIサポート付き</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- KaTeX (数式レンダリング) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <style>
+    /* プリント用紙の基本スタイル (画面プレビュー用) */
+    .print-page {
+      width: 210mm;
+      min-height: 297mm;
+      background: white;
+      padding: 15mm 20mm;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      margin: 0 auto;
+      box-sizing: border-box;
+      font-family: serif;
+    }
+
+    /* 問題のブロック */
+    .question-block {
+      margin-bottom: 2.5rem;
+      page-break-inside: avoid; /* 印刷時、問題の途中で改ページさせない */
+      break-inside: avoid;
+    }
+
+    /* 解答ブロックの表示制御 */
+    .answer-block { display: none; }
+    .show-answers .answer-block { display: block; }
+    .show-answers .title-answer-mark { display: inline; }
+    .title-answer-mark { display: none; color: #dc2626; margin-left: 0.5rem; font-size: 0.9em; }
+
+    /* 印刷時の強力な設定 */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 0; /* ブラウザ標準の余白を無効化 */
+      }
+      body, html {
+        background-color: white !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact;
+      }
+      /* 印刷時は設定UIやプレビュー背景の影などを消す */
+      .no-print { display: none !important; }
+      .print-bg { background-color: white !important; padding: 0 !important; }
+      .print-page {
+        width: 100% !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 15mm 20mm !important;
+        min-height: auto !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans print-bg">
+
+  <!-- ================= 設定画面 ================= -->
+  <div id="setup-view" class="min-h-screen py-8 px-4">
+    <div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-md">
+      <h1 class="text-2xl font-bold mb-2 text-center text-indigo-700">数学Ⅰ ランダム小テスト作成</h1>
+      <div class="flex justify-center mb-6 text-purple-600 font-bold text-sm">
+        ✨ Gemini AI サポート機能搭載
+      </div>
+      <p class="mb-6 text-gray-600 text-sm leading-relaxed">
+        出題したい範囲と問題数を選択して作成ボタンを押すと、印刷用の小テストが生成されます。<br>
+        解答画面から、AIに詳細な解説を作成させたり、アドバイスをもらうことができます。
+      </p>
+
+      <div class="flex flex-wrap items-center justify-between mb-6 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <div class="flex gap-3">
+          <button id="btn-select-all" class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-100 rounded shadow-sm text-sm font-medium transition">すべて選択</button>
+          <button id="btn-deselect-all" class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-100 rounded shadow-sm text-sm font-medium transition">すべて解除</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <label for="question-count" class="font-bold text-gray-700">出題数:</label>
+          <select id="question-count" class="border border-gray-300 rounded px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="5">5問 (約5分)</option>
+            <option value="10" selected>10問 (標準: 約10分)</option>
+            <option value="15">15問 (約15分)</option>
+            <option value="20">20問 (約20分)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- カテゴリ一覧がここに生成されます -->
+      <div id="categories-container" class="space-y-6 mb-8"></div>
+
+      <div class="text-center">
+        <button id="btn-generate" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full shadow-lg transition transform hover:scale-105">
+          プリントを作成する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 印刷プレビュー画面 ================= -->
+  <div id="print-view" class="hidden min-h-screen py-8 flex flex-col items-center print-bg">
+    
+    <!-- 画面操作用ヘッダー（印刷時は非表示） -->
+    <div class="w-full max-w-[210mm] mb-6 flex justify-between items-center bg-white p-4 rounded-lg shadow-md no-print">
+      <button id="btn-back" class="text-indigo-600 hover:text-indigo-800 font-bold px-4 py-2 flex items-center gap-1 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        設定に戻る
+      </button>
+      <div class="flex gap-4 items-center">
+        <div class="flex bg-gray-100 rounded-lg p-1 shadow-inner">
+          <button id="toggle-q" class="px-5 py-2 rounded-md transition bg-white shadow font-bold text-indigo-700">問題プリント</button>
+          <button id="toggle-a" class="px-5 py-2 rounded-md transition text-gray-600 hover:bg-gray-200">解答プリント</button>
+        </div>
+        <button onclick="window.print()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold shadow transition flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+          印刷する
+        </button>
+      </div>
+    </div>
+
+    <!-- A4プリント本体 -->
+    <div id="print-page" class="print-page relative">
+      <!-- プリントヘッダー -->
+      <div class="flex justify-between items-end border-b-2 border-gray-800 pb-2 mb-8">
+        <h1 class="text-2xl font-bold tracking-widest">
+          数学Ⅰ 復習小テスト <span class="title-answer-mark">【解答】</span>
+        </h1>
+        <div class="flex gap-6 text-lg ml-auto whitespace-nowrap">
+          <div>得点：<span class="inline-block w-16 border-b border-gray-400 text-right pr-2">/ <span id="print-score-max">10</span></span></div>
+          <div>氏名：<span class="inline-block w-40 border-b border-gray-400">&nbsp;</span></div>
+        </div>
+      </div>
+
+      <!-- 問題リスト -->
+      <div id="questions-container" class="flex flex-col"></div>
+
+      <!-- AIからの応援メッセージ (解答プリント時などに表示) -->
+      <div id="ai-advice-container" class="mt-8 pt-8 border-t border-gray-300 hidden break-inside-avoid answer-block">
+        <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-5 rounded-xl border border-indigo-100 shadow-sm relative">
+          <div class="absolute -top-4 left-4 bg-white px-3 py-1 rounded-full border border-indigo-200 text-purple-700 font-bold text-sm flex items-center gap-1 shadow-sm">
+            ✨ 先生(AI)からの学習アドバイス
+          </div>
+          <div id="ai-advice-content" class="text-gray-700 leading-relaxed mt-2 text-sm font-sans">
+            <!-- メッセージ生成中... -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- Gemini API Configuration ---
+    const apiKey = ""; // 実行環境からキーが提供されます
+
+    // AI API Fetch Utility with Exponential Backoff
+    async function fetchGeminiAPI(prompt, systemPrompt) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      };
+
+      let retries = 5;
+      let delay = 1000;
+      while (retries > 0) {
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const data = await response.json();
+          return data.candidates[0].content.parts[0].text;
+        } catch (error) {
+          retries--;
+          if (retries === 0) throw error;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2;
+        }
+      }
+    }
+
+    // HTML Escape Helper
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+      );
+    }
+
+    // --- 数式フォーマット用ヘルパー関数 ---
+    const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const randChoice = (arr) => arr[randInt(0, arr.length - 1)];
+
+    function formatPoly(...terms) {
+      let s = '';
+      let isFirst = true;
+      for (let { c, v } of terms) {
+        if (c === 0) continue;
+        let sign = '';
+        if (c < 0) sign = '-';
+        else if (!isFirst && c > 0) sign = '+';
+        
+        let absC = Math.abs(c);
+        let coefStr = '';
+        if (absC !== 1 || v === '') {
+          coefStr = absC.toString();
+        }
+        
+        s += (isFirst && sign === '-' ? '-' : (isFirst ? '' : sign)) + coefStr + v;
+        isFirst = false;
+      }
+      return s === '' ? '0' : s;
+    }
+
+    // --- ランダム性を高めた問題ジェネレータ群 ---
+    const generators = {
+      'ch1-1': () => { // 式の計算（展開・因数分解）
+        let a = randInt(1, 4); let c = randInt(1, 4);
+        let b = randChoice([-7,-6,-5,-4,-3,-2,-1,1,2,3,4,5,6,7]);
+        let d = randChoice([-7,-6,-5,-4,-3,-2,-1,1,2,3,4,5,6,7]);
+        let expanded = formatPoly({ c: a * c, v: 'x^2' }, { c: a * d + b * c, v: 'x' }, { c: b * d, v: '' });
+        let factored = `(${formatPoly({ c: a, v: 'x' }, { c: b, v: '' })})(${formatPoly({ c: c, v: 'x' }, { c: d, v: '' })})`;
+        if (a === c && b === d) factored = `(${formatPoly({ c: a, v: 'x' }, { c: b, v: '' })})^2`;
+
+        if (randInt(0, 1) === 0) return { 
+          q: `次の式を展開しなさい。<br>$${factored}$`, 
+          a: `$${expanded}$`,
+          exp: `乗法公式を利用して展開します。`
+        };
+        else return { 
+          q: `次の式を因数分解しなさい。<br>$${expanded}$`, 
+          a: `$${factored}$`,
+          exp: `たすき掛けなどを利用して因数分解します。`
+        };
+      },
+      'ch1-2': () => { // 実数（分母の有理化）
+        let primes = [2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
+        let b = randChoice(primes);
+        let c = randChoice(primes.filter(x => x !== b));
+        if (b < c) { let tmp = b; b = c; c = tmp; }
+        let num = b - c;
+        return { 
+          q: `次の式の分母を有理化しなさい。<br>$\\frac{${num === 1 ? '1' : num}}{\\sqrt{${b}} - \\sqrt{${c}}}$`, 
+          a: `$\\sqrt{${b}} + \\sqrt{${c}}$`,
+          exp: `分母と分子の両方に $\\sqrt{${b}} + \\sqrt{${c}}$ を掛けて計算します。`
+        };
+      },
+      'ch1-3': () => { // 1次不等式
+        let a = randInt(1, 6); let c = randInt(-5, -1);
+        let ans = randInt(-5, 5);
+        let diff = a - c; 
+        let b = randInt(-8, 8);
+        let d = ans * diff + b;
+        return {
+          q: `次の1次不等式を解きなさい。<br>$${formatPoly({c:a, v:'x'}, {c:b, v:''})} < ${formatPoly({c:c, v:'x'}, {c:d, v:''})}$`,
+          a: `$x < ${ans}$`,
+          exp: `$x$ を含む項を左辺に、定数項を右辺に移項します。負の数で割る場合は不等号の向きが逆になります。`
+        };
+      },
+      'ch2-1': () => { // 集合と命題
+        let a = randInt(2, 9);
+        let pattern = randInt(0, 2);
+        let type = randInt(0, 1);
+        
+        let p, q, ans, exp;
+        if (pattern === 0) {
+          p = `x = ${a}`; q = `x^2 = ${a*a}`;
+          if (type === 0) { ans = `十分条件`; exp = `真 (反例なし), 逆は偽 (反例: $x = -${a}$)`; }
+          else { let tmp=p; p=q; q=tmp; ans = `必要条件`; exp = `偽 (反例: $x = -${a}$), 逆は真`; }
+        } else if (pattern === 1) {
+          p = `|x| = ${a}`; q = `x = ${a}`;
+          if (type === 0) { ans = `必要条件`; exp = `偽 (反例: $x = -${a}$), 逆は真`; }
+          else { let tmp=p; p=q; q=tmp; ans = `十分条件`; exp = `真, 逆は偽 (反例: $x = -${a}$)`; }
+        } else {
+          p = `x > ${a}`; q = `x > ${a-2}`;
+          if (type === 0) { ans = `十分条件`; exp = `真, 逆は偽 (反例: $x = ${a-1}$)`; }
+          else { let tmp=p; p=q; q=tmp; ans = `必要条件`; exp = `偽 (反例: $x = ${a-1}$), 逆は真`; }
+        }
+        return {
+          q: `$x$ を実数とする。$${p}$ は $${q}$ であるための何条件か。`,
+          a: ans,
+          exp: `${exp}となります。`
+        };
+      },
+      'ch3-1': () => { // 2次関数とグラフ（頂点）
+        let p = randInt(-6, 6);
+        let q = randInt(-6, 6);
+        let a = randChoice([1, -1, 2, -2, 3, -3, 4, -4]);
+        let expanded = formatPoly({c: a, v: 'x^2'}, {c: -2*a*p, v: 'x'}, {c: a*p*p + q, v: ''});
+        return {
+          q: `2次関数 $y = ${expanded}$ のグラフの頂点の座標を求めなさい。`,
+          a: `$(${p}, ${q})$`,
+          exp: `式を平方完成して $y = a(x-p)^2+q$ の形に変形し、頂点 $(p, q)$ を求めます。`
+        };
+      },
+      'ch3-2': () => { // 最大値・最小値
+        let p = randInt(-5, 5);
+        let q = randInt(-6, 6);
+        let a = randChoice([1, -1, 2, -2, 3, -3]);
+        let expanded = formatPoly({c: a, v: 'x^2'}, {c: -2*a*p, v: 'x'}, {c: a*p*p + q, v: ''});
+        if (a > 0) {
+          return {
+            q: `2次関数 $y = ${expanded}$ の最大値、最小値を求めなさい。`,
+            a: `$x = ${p}$ のとき最小値 $${q}$ (最大値はない)`,
+            exp: `$x^2$ の係数が正なのでグラフは下に凸です。頂点で最小値をとります。`
+          };
+        } else {
+          return {
+            q: `2次関数 $y = ${expanded}$ の最大値、最小値を求めなさい。`,
+            a: `$x = ${p}$ のとき最大値 $${q}$ (最小値はない)`,
+            exp: `$x^2$ の係数が負なのでグラフは上に凸です。頂点で最大値をとります。`
+          };
+        }
+      },
+      'ch3-3': () => { // 2次方程式
+        let a = randInt(-6, 6);
+        let b = randInt(-6, 6);
+        if (a === b) b = a + 1;
+        let sum = a + b;
+        let prod = a * b;
+        let expanded = formatPoly({c: 1, v: 'x^2'}, {c: -sum, v: 'x'}, {c: prod, v: ''});
+        return {
+          q: `次の2次方程式を解きなさい。<br>$${expanded} = 0$`,
+          a: `$x = ${Math.min(a,b)}, ${Math.max(a,b)}$`,
+          exp: `左辺を因数分解して解を求めます。解の公式を利用することもできます。`
+        };
+      },
+      'ch3-4': () => { // 2次不等式
+        let a = randInt(-5, 5);
+        let b = randInt(-5, 5);
+        if (a === b) b = a + 2;
+        if (a > b) { let tmp = a; a = b; b = tmp; } // a < b
+        let sum = a + b;
+        let prod = a * b;
+        let expanded = formatPoly({c: 1, v: 'x^2'}, {c: -sum, v: 'x'}, {c: prod, v: ''});
+        let isGt = randInt(0, 1) === 0;
+        return {
+          q: `次の2次不等式を解きなさい。<br>$${expanded} ${isGt ? '> 0' : '< 0'}$`,
+          a: isGt ? `$x < ${a}, \\; ${b} < x$` : `$${a} < x < ${b}$`,
+          exp: `左辺を因数分解し、$y=0$ となる $x$ 切片を求めて、グラフの上下を判断します。`
+        };
+      },
+      'ch4-1': () => { // 三角比
+        let angles = [0, 30, 45, 60, 90, 120, 135, 150, 180];
+        let funcs = ['\\sin', '\\cos', '\\tan'];
+        
+        let angle, func, ans;
+        // 定義されない組み合わせ(tan 90)は回避する
+        do {
+          angle = randChoice(angles);
+          func = randChoice(funcs);
+        } while (func === '\\tan' && angle === 90);
+
+        if (func === '\\sin') {
+          if (angle===0 || angle===180) ans = '0';
+          if (angle===30 || angle===150) ans = '\\frac{1}{2}';
+          if (angle===45 || angle===135) ans = '\\frac{1}{\\sqrt{2}}';
+          if (angle===60 || angle===120) ans = '\\frac{\\sqrt{3}}{2}';
+          if (angle===90) ans = '1';
+        } else if (func === '\\cos') {
+          if (angle===0) ans = '1';
+          if (angle===30) ans = '\\frac{\\sqrt{3}}{2}';
+          if (angle===150) ans = '-\\frac{\\sqrt{3}}{2}';
+          if (angle===45) ans = '\\frac{1}{\\sqrt{2}}';
+          if (angle===135) ans = '-\\frac{1}{\\sqrt{2}}';
+          if (angle===60) ans = '\\frac{1}{2}';
+          if (angle===120) ans = '-\\frac{1}{2}';
+          if (angle===90) ans = '0';
+          if (angle===180) ans = '-1';
+        } else { // tan
+          if (angle===0 || angle===180) ans = '0';
+          if (angle===30) ans = '\\frac{1}{\\sqrt{3}}';
+          if (angle===150) ans = '-\\frac{1}{\\sqrt{3}}';
+          if (angle===45) ans = '1';
+          if (angle===135) ans = '-1';
+          if (angle===60) ans = '\\sqrt{3}';
+          if (angle===120) ans = '-\\sqrt{3}';
+        }
+        return {
+          q: `次の三角比の値を求めなさい。<br>$${func} ${angle}^\\circ$`,
+          a: `$${ans}$`,
+          exp: `特別な角を持つ直角三角形、または単位円を用いて求めます。`
+        };
+      },
+      'ch4-2': () => { // 余弦定理
+        let b = randInt(2, 8);
+        let c = randInt(2, 8);
+        let A_deg = randChoice([60, 90, 120]);
+        let cosA = A_deg === 60 ? 0.5 : (A_deg === 120 ? -0.5 : 0);
+        let a2 = b*b + c*c - 2*b*c*cosA;
+        let a_ans = `\\sqrt{${a2}}`;
+        if (Number.isInteger(Math.sqrt(a2))) a_ans = Math.sqrt(a2).toString();
+        
+        return {
+          q: `$\\triangle ABC$ において、$b=${b}, c=${c}, A=${A_deg}^\\circ$ のとき、辺 $a$ の長さを求めなさい。`,
+          a: `$a = ${a_ans}$`,
+          exp: `余弦定理 $a^2 = b^2 + c^2 - 2bc \\cos A$ に各値を代入して計算します。`
+        };
+      }
+    };
+
+    // --- カテゴリ定義 ---
+    const categories = [
+      {
+        chapter: '第1章 数と式',
+        sections: [
+          { id: 'ch1-1', name: '1. 式の計算（展開・因数分解など）' },
+          { id: 'ch1-2', name: '2. 実数（平方根、有理化など）' },
+          { id: 'ch1-3', name: '3. 1次不等式' },
+        ]
+      },
+      {
+        chapter: '第2章 集合と命題',
+        sections: [
+          { id: 'ch2-1', name: '1. 集合と命題（必要・十分条件など）' },
+        ]
+      },
+      {
+        chapter: '第3章 2次関数',
+        sections: [
+          { id: 'ch3-1', name: '1. 2次関数とグラフ（頂点など）' },
+          { id: 'ch3-2', name: '2. 最大と最小，関数の決定' },
+          { id: 'ch3-3', name: '3. 2次関数のグラフと方程式' },
+          { id: 'ch3-4', name: '4. 2次関数のグラフと不等式' },
+        ]
+      },
+      {
+        chapter: '第4章 図形と計量',
+        sections: [
+          { id: 'ch4-1', name: '1. 三角比（基本・相互関係）' },
+          { id: 'ch4-2', name: '2. 正弦定理と余弦定理' },
+        ]
+      }
+    ];
+
+    // --- メインロジック ---
+    document.addEventListener('DOMContentLoaded', () => {
+      const setupView = document.getElementById('setup-view');
+      const printView = document.getElementById('print-view');
+      const categoriesContainer = document.getElementById('categories-container');
+      const questionsContainer = document.getElementById('questions-container');
+      const printPage = document.getElementById('print-page');
+
+      // 1. UIの動的生成
+      categories.forEach((cat) => {
+        let secHtml = cat.sections.map(sec => `
+          <label class="flex items-center p-3 rounded cursor-pointer transition bg-white border border-gray-200 hover:bg-gray-50">
+            <input type="checkbox" value="${sec.id}" class="section-checkbox w-5 h-5 text-indigo-600 rounded mr-3" checked>
+            <span class="text-gray-700 font-medium">${sec.name}</span>
+          </label>
+        `).join('');
+
+        categoriesContainer.innerHTML += `
+          <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <h2 class="font-bold text-lg mb-3 pb-2 border-b border-gray-300">${cat.chapter}</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${secHtml}
+            </div>
+          </div>
+        `;
+      });
+
+      const checkboxes = document.querySelectorAll('.section-checkbox');
+
+      // チェックボックスのスタイル更新関数
+      const updateCheckboxStyle = () => {
+        checkboxes.forEach(cb => {
+          const label = cb.closest('label');
+          if (cb.checked) {
+            label.classList.replace('border-gray-200', 'border-indigo-300');
+            label.classList.replace('bg-white', 'bg-indigo-50');
+            label.querySelector('span').classList.replace('text-gray-700', 'text-indigo-800');
+          } else {
+            label.classList.replace('border-indigo-300', 'border-gray-200');
+            label.classList.replace('bg-indigo-50', 'bg-white');
+            label.querySelector('span').classList.replace('text-indigo-800', 'text-gray-700');
+          }
+        });
+      };
+
+      checkboxes.forEach(cb => cb.addEventListener('change', updateCheckboxStyle));
+      updateCheckboxStyle(); // 初期適用
+
+      // すべて選択 / 解除
+      document.getElementById('btn-select-all').addEventListener('click', () => {
+        checkboxes.forEach(cb => cb.checked = true);
+        updateCheckboxStyle();
+      });
+      document.getElementById('btn-deselect-all').addEventListener('click', () => {
+        checkboxes.forEach(cb => cb.checked = false);
+        updateCheckboxStyle();
+      });
+
+      // 画面切り替え関数
+      const showPrintView = (show) => {
+        if (show) {
+          setupView.classList.add('hidden');
+          printView.classList.remove('hidden');
+          printView.classList.add('flex');
+        } else {
+          setupView.classList.remove('hidden');
+          printView.classList.add('hidden');
+          printView.classList.remove('flex');
+        }
+      };
+
+      document.getElementById('btn-back').addEventListener('click', () => showPrintView(false));
+
+      // 解答トグル
+      const btnQ = document.getElementById('toggle-q');
+      const btnA = document.getElementById('toggle-a');
+      
+      const setAnswerMode = (showAnswers) => {
+        if (showAnswers) {
+          printPage.classList.add('show-answers');
+          btnA.classList.replace('text-gray-600', 'text-red-600');
+          btnA.classList.replace('hover:bg-gray-200', 'bg-white');
+          btnA.classList.add('shadow', 'font-bold');
+          btnQ.classList.replace('text-indigo-700', 'text-gray-600');
+          btnQ.classList.replace('bg-white', 'hover:bg-gray-200');
+          btnQ.classList.remove('shadow', 'font-bold');
+        } else {
+          printPage.classList.remove('show-answers');
+          btnQ.classList.replace('text-gray-600', 'text-indigo-700');
+          btnQ.classList.replace('hover:bg-gray-200', 'bg-white');
+          btnQ.classList.add('shadow', 'font-bold');
+          btnA.classList.replace('text-red-600', 'text-gray-600');
+          btnA.classList.replace('bg-white', 'hover:bg-gray-200');
+          btnA.classList.remove('shadow', 'font-bold');
+        }
+      };
+
+      btnQ.addEventListener('click', () => setAnswerMode(false));
+      btnA.addEventListener('click', () => setAnswerMode(true));
+
+      // --- AI 学習アドバイス生成関数 ---
+      async function generateAdvice(selectedIds) {
+        const adviceContainer = document.getElementById('ai-advice-container');
+        const adviceContent = document.getElementById('ai-advice-content');
+        adviceContainer.classList.remove('hidden');
+        adviceContent.innerHTML = `<div class="flex items-center text-indigo-500"><svg class="animate-spin -ml-1 mr-2 h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> AI先生がメッセージを考えています...</div>`;
+
+        const selectedNames = [];
+        categories.forEach(cat => {
+          cat.sections.forEach(sec => {
+            if (selectedIds.includes(sec.id)) {
+              selectedNames.push(sec.name);
+            }
+          });
+        });
+
+        const systemPrompt = "あなたは高校生の数学を教える親しみやすく熱血な教師です。";
+        const prompt = `今回の小テストの出題範囲は以下の通りです：${selectedNames.join(', ')}。このテストを受ける生徒に向けて、この単元の勉強のコツや、やる気が出るような応援メッセージを短く（150〜200文字程度）書いてください。プレーンテキストで記述し、見出し等は不要です。`;
+
+        try {
+          const responseText = await fetchGeminiAPI(prompt, systemPrompt);
+          adviceContent.innerHTML = escapeHTML(responseText).replace(/\n/g, '<br>');
+        } catch (e) {
+          console.error("AI Advice Error:", e);
+          adviceContainer.classList.add('hidden'); // エラー時は非表示
+        }
+      }
+
+      // 2. 問題生成メイン処理
+      document.getElementById('btn-generate').addEventListener('click', () => {
+        const selectedIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+        if (selectedIds.length === 0) {
+          alert("出題範囲を1つ以上選択してください。");
+          return;
+        }
+
+        const numQuestions = parseInt(document.getElementById('question-count').value);
+        document.getElementById('print-score-max').textContent = numQuestions;
+
+        const generatedQuestions = [];
+        const uniqueKeys = new Set();
+        let attempts = 0;
+        const maxAttempts = numQuestions * 50; // 無限ループ防止
+
+        // 重複回避ロジック
+        while (generatedQuestions.length < numQuestions && attempts < maxAttempts) {
+          attempts++;
+          const targetId = randChoice(selectedIds);
+          const genFunc = generators[targetId] || generators['ch1-1'];
+          const qData = genFunc();
+
+          // 問題文(q)の文字列をキーとして重複チェック
+          if (!uniqueKeys.has(qData.q)) {
+            uniqueKeys.add(qData.q);
+            generatedQuestions.push({ num: generatedQuestions.length + 1, ...qData });
+          }
+        }
+
+        if (generatedQuestions.length < numQuestions) {
+          alert(`条件が厳しく、重複しない問題を ${generatedQuestions.length} 問までしか作成できませんでした。`);
+        }
+
+        // 3. DOMへ描画 (AI解説ボタンを含む)
+        let htmlContent = '';
+        generatedQuestions.forEach(q => {
+          // AIに渡すためのエンコードされたデータ
+          const safeQ = encodeURIComponent(q.q);
+          const safeA = encodeURIComponent(q.a);
+
+          htmlContent += `
+            <div class="question-block flex flex-col pt-2 pb-1 text-lg">
+              <div class="flex gap-3">
+                <span class="font-bold min-w-[30px]">(${q.num})</span>
+                <div class="flex-1 leading-loose math-content">${q.q}</div>
+              </div>
+              <div class="answer-block ml-10 mt-3">
+                <div class="bg-red-50 p-3 rounded-lg border border-red-200">
+                  <div class="text-red-700 font-bold mb-1">
+                    [答] <span class="math-content text-xl">${q.a}</span>
+                  </div>
+                  <div class="text-gray-700 text-sm mt-2 border-t border-red-200 pt-2 leading-relaxed">
+                    <span class="font-bold text-red-500 mr-1">解説:</span>
+                    <span class="math-content">${q.exp}</span>
+                  </div>
+                  
+                  <!-- AI 解説生成ボタン -->
+                  <div class="mt-3 no-print ai-btn-container">
+                    <button class="btn-ai-explain bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded text-sm font-bold border border-purple-300 transition shadow-sm flex items-center gap-1" data-q="${safeQ}" data-a="${safeA}">
+                      ✨ AIにステップバイステップの詳しい解説を作ってもらう
+                    </button>
+                  </div>
+                  
+                  <!-- AI 解説表示エリア -->
+                  <div class="ai-explanation-container mt-4 hidden bg-white p-4 pt-5 rounded-lg border-2 border-purple-200 text-gray-800 text-sm leading-relaxed relative">
+                    <div class="absolute -top-3 left-3 bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs font-bold border border-purple-300 shadow-sm">
+                      ✨ AI詳細解説
+                    </div>
+                    <div class="ai-content math-content"></div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
+        questionsContainer.innerHTML = htmlContent;
+
+        // 4. KaTeXで数式をレンダリング (初期生成分)
+        if (window.renderMathInElement) {
+          renderMathInElement(questionsContainer, {
+            delimiters: [
+              {left: '$$', right: '$$', display: true},
+              {left: '$', right: '$', display: false},
+              {left: '\\(', right: '\\)', display: false},
+              {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+          });
+        }
+
+        // 5. AI解説ボタンのイベントリスナー設定
+        document.querySelectorAll('.btn-ai-explain').forEach(btn => {
+          btn.addEventListener('click', async function() {
+            const qText = decodeURIComponent(this.dataset.q);
+            const aText = decodeURIComponent(this.dataset.a);
+            const explanationContainer = this.parentElement.nextElementSibling;
+            const contentDiv = explanationContainer.querySelector('.ai-content');
+            
+            // UIをローディング状態に
+            this.disabled = true;
+            this.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-purple-700 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> AIが解説を生成中...`;
+            
+            try {
+              const systemPrompt = "あなたは親切で分かりやすい数学の先生です。提供された問題と解答に基づき、なぜそうなるのか、計算の途中式を含めて小学生でも分かるようにやさしく詳しく解説してください。数式のフォーマットにはKaTeX（インラインは$、ブロックは$$）を使用してください。HTMLタグは使わず、プレーンテキストとKaTeXのみで返答してください。";
+              const prompt = `以下の数学の問題について、ステップバイステップで詳しい解説を作成してください。\n\n【問題】\n${qText}\n\n【解答】\n${aText}`;
+              
+              const responseText = await fetchGeminiAPI(prompt, systemPrompt);
+              
+              // テキストを挿入し、改行を<br>に変換
+              contentDiv.innerHTML = escapeHTML(responseText).replace(/\n/g, '<br>');
+              
+              // 新しく生成されたAIの解説内の数式をレンダリング
+              if (window.renderMathInElement) {
+                renderMathInElement(contentDiv, {
+                  delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                  ],
+                  throwOnError: false
+                });
+              }
+              
+              // ボタンを隠し、解説エリアを表示
+              this.parentElement.classList.add('hidden');
+              explanationContainer.classList.remove('hidden');
+            } catch (e) {
+              console.error(e);
+              this.innerHTML = "エラーが発生しました。再試行してください。";
+              this.disabled = false;
+            }
+          });
+        });
+
+        // 6. 全体の学習アドバイスを非同期で生成開始
+        generateAdvice(selectedIds);
+
+        // 初期状態は問題プリント
+        setAnswerMode(false);
+        showPrintView(true);
+      });
+    });
+  </script>
+</body>
+</html>
