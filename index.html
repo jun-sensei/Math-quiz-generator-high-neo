@@ -671,10 +671,22 @@ ${selectedNames.join(', ')}
             // JSON部分だけを取り出す
             const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
-              let rawJson = jsonMatch[0];
-              // JSONで無効なエスケープシーケンス（\sなど）をサニタイズ（Geminiの出力揺れ対策）
-              rawJson = rawJson.replace(/\\([^"\\\/bfnrtu])/g, '\\\\$1');
-              const aiQuestions = JSON.parse(rawJson);
+              let aiQuestions;
+              try {
+                aiQuestions = JSON.parse(jsonMatch[0]);
+              } catch (err) {
+                // Geminiが \uparrow や \underbrace 等をエスケープせずに出力した場合（Bad escaped characterエラー対策）
+                let rawJson = jsonMatch[0];
+                // 無効なエスケープシーケンスのバックスラッシュだけを二重にする
+                rawJson = rawJson.replace(/(?<!\\)\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+                try {
+                  aiQuestions = JSON.parse(rawJson);
+                } catch (err2) {
+                  // 最終フォールバック：すべてのバックスラッシュをエスケープし、ダブルクォートだけ戻す
+                  rawJson = jsonMatch[0].replace(/\\/g, '\\\\').replace(/\\\\"/g, '\\"');
+                  aiQuestions = JSON.parse(rawJson);
+                }
+              }
               generatedQuestions = aiQuestions.slice(0, numQuestions).map((qData, index) => ({
                 num: index + 1,
                 q: qData.q,
