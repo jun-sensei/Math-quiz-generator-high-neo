@@ -180,7 +180,7 @@
 
   <script>
     // AI API Fetch Utility (Vercel Serverless Function経由)
-    async function fetchGeminiAPI(prompt, systemPrompt) {
+    async function fetchGeminiAPI(prompt, systemPrompt, isJson = false) {
       let retries = 5;
       let delay = 1000;
       while (retries > 0) {
@@ -188,13 +188,19 @@
           const response = await fetch('/api/generate', {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt, systemPrompt })
+            body: JSON.stringify({ prompt, systemPrompt, isJson })
           });
           if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             throw new Error(errData.error || `HTTP error! status: ${response.status}`);
           }
           const data = await response.json();
+          if (!data.candidates || data.candidates.length === 0) {
+            throw new Error("AIからの応答が空でした（セーフティフィルター等によるブロックの可能性があります）");
+          }
+          if (!data.candidates[0].content) {
+             throw new Error(`AIからのコンテンツがありませんでした（理由: ${data.candidates[0].finishReason}）`);
+          }
           return data.candidates[0].content.parts[0].text;
         } catch (error) {
           retries--;
@@ -661,11 +667,14 @@ ${selectedNames.join(', ')}
 - 答えが極端に複雑にならないよう、適度な難易度にしてください。`;
 
           try {
-            const aiResponse = await fetchGeminiAPI(prompt, systemPrompt);
+            const aiResponse = await fetchGeminiAPI(prompt, systemPrompt, true);
             // JSON部分だけを取り出す
             const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
-              const aiQuestions = JSON.parse(jsonMatch[0]);
+              let rawJson = jsonMatch[0];
+              // JSONで無効なエスケープシーケンス（\sなど）をサニタイズ（Geminiの出力揺れ対策）
+              rawJson = rawJson.replace(/\\([^"\\\/bfnrtu])/g, '\\\\$1');
+              const aiQuestions = JSON.parse(rawJson);
               generatedQuestions = aiQuestions.slice(0, numQuestions).map((qData, index) => ({
                 num: index + 1,
                 q: qData.q,

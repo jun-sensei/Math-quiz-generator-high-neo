@@ -8,15 +8,19 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in Vercel.' });
   }
 
-  const { prompt, systemPrompt } = req.body;
+  const { prompt, systemPrompt, isJson } = req.body;
 
   try {
-    // 安定稼働している Gemini 1.5 Flash に変更
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // 最新の Gemini 2.5 Flash に変更
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
       systemInstruction: { parts: [{ text: systemPrompt }] }
     };
+
+    if (isJson) {
+      payload.generationConfig = { responseMimeType: "application/json" };
+    }
 
     const response = await fetch(url, {
       method: "POST",
